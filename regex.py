@@ -19,7 +19,7 @@ class State(ABC):
 
     def check_next(self, next_char: str) -> State | Exception:
         """method checks if next character is handled by current state"""
-        for state in reversed(self.next_states):
+        for state in self.next_states:
             if state.check_self(next_char):
                 return state
         raise NotImplementedError("rejected string")
@@ -61,6 +61,13 @@ class DotState(State):
     def check_self(self, char: str):
         return True
 
+    def check_next(self, next_char: str) -> State | Exception:
+        """method checks if next character is handled by current state"""
+        for state in reversed(self.next_states):
+            if state.check_self(next_char):
+                return state
+        raise NotImplementedError("rejected string")
+
 class AsciiState(State):
     """
     state for alphabet letters or numbers
@@ -82,13 +89,14 @@ class StarState(State):
     def __init__(self, checking_state: State):
         self.next_states = []
         self.state = checking_state
+        self.state.next_states.append(self.state)
         self.next_states.append(checking_state)
-        self.next_states.append(self)
 
     def check_self(self, char):
+        for el in self.next_states[1:]:
+            self.next_states[0].next_states.append(el)
+
         for state in self.next_states:
-            if isinstance(state, StarState):
-                continue
             if state.check_self(char):
                 return True
         return False
@@ -99,19 +107,22 @@ class PlusState(State):
     def __init__(self, checking_state: State):
         self.next_states = []
         self.state = checking_state
-        self.next_states.append(StarState(checking_state))
+        self.state.next_states.append(self.state)
 
     def check_self(self, char):
+        for el in self.next_states:
+            self.state.next_states.append(el)
+        self.next_states = []
+
         if not self.state.check_self(char):
             return False
         return True
+
     def check_next(self, next_char: str):
-        for el in self.next_states[1:]:
-            self.next_states[0].next_states.append(el)
-        for state in reversed(self.next_states):
-            if state.check_self(next_char):
-                return state
-        raise NotImplementedError("rejected string")
+        try:
+            return self.state.check_next(next_char)
+        except NotImplementedError:
+            raise NotImplementedError("rejected string")
 
 
 class RegexFSM:
@@ -180,8 +191,6 @@ class RegexFSM:
             try:
                 curr_state = curr_state.check_next(char)
             except NotImplementedError:
-                return False
-            if not curr_state.check_self(char):
                 return False
         try:
             curr_state = curr_state.check_next("")
